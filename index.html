@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Микро-SaaS Опросник (Без библиотек)</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; text-align: center; background: #f4f7f6; padding: 20px; color: #333; margin: 0; }
+        .container { max-width: 500px; margin: 40px auto; background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        h2 { margin-bottom: 25px; font-size: 22px; }
+        
+        /* Кнопки голосования */
+        button { display: block; width: 100%; padding: 16px; margin: 12px 0; font-size: 16px; font-weight: 600; cursor: pointer; border: none; border-radius: 10px; background: #2f6b4f; color: white; transition: background 0.2s, transform 0.1s; }
+        button:hover { background: #23513b; }
+        button:active { transform: scale(0.98); }
+        button:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+        .hidden { display: none; }
+
+        /* Самодельный График (Горизонтальные бары) */
+        .chart-row { margin: 20px 0; text-align: left; }
+        .chart-label { font-weight: 600; font-size: 14px; margin-bottom: 5px; display: flex; justify-content: space-between; }
+        .chart-track { background: #e0e0e0; width: 100%; height: 24px; border-radius: 6px; overflow: hidden; }
+        .chart-bar { height: 100%; width: 0%; /* Меняется через JS */ transition: width 0.5s ease-out; }
+        
+        /* Цвета для разных вариантов */
+        .bar-js { background: #f1c40f; }
+        .bar-python { background: #3498db; }
+        .bar-go { background: #2ecc71; }
+
+        .toggle-mode { margin-top: 30px; font-size: 13px; color: #888; cursor: pointer; text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Какой стек вы выберете для MVP?</h2>
+
+    <!-- ЭКРАН СЛУШАТЕЛЯ -->
+    <div id="voter-screen">
+        <p style="color: #666;">Выберите один вариант ответа:</p>
+        <button onclick="vote('js')">JavaScript / Node.js</button>
+        <button onclick="vote('python')">Python (FastAPI)</button>
+        <button onclick="vote('go')">Go (Golang)</button>
+    </div>
+
+    <!-- ЭКРАН СПИКЕРА (САМОДЕЛЬНЫЙ ГРАФИК) -->
+    <div id="speaker-screen" class="hidden">
+        <p style="color: #666; margin-bottom: 30px;">Результаты в реальном времени:</p>
+        
+        <div class="chart-row">
+            <div class="chart-label"><span>Node.js</span> <span id="count-js">0</span></div>
+            <div class="chart-track"><div id="bar-js" class="chart-bar bar-js"></div></div>
+        </div>
+
+        <div class="chart-row">
+            <div class="chart-label"><span>Python</span> <span id="count-python">0</span></div>
+            <div class="chart-track"><div id="bar-python" class="chart-bar bar-python"></div></div>
+        </div>
+
+        <div class="chart-row">
+            <div class="chart-label"><span>Go</span> <span id="count-go">0</span></div>
+            <div class="chart-track"><div id="bar-go" class="chart-bar bar-go"></div></div>
+        </div>
+    </div>
+
+    <div class="toggle-mode" onclick="toggleMode()">Переключить режим (Слушатель / Спикер)</div>
+</div>
+
+<script>
+    const BASE_KEY = "my_unique_presentation_id_2026"; 
+    const API_URL = "https://mileshilliard.com";
+    let pollInterval = null;
+
+    async function vote(option) {
+        const buttons = document.querySelectorAll('#voter-screen button');
+        buttons.forEach(btn => btn.disabled = true);
+
+        try {
+            const response = await fetch(`${API_URL}/hit/${BASE_KEY}_opt_${option}`);
+            const data = await response.json();
+            alert(`Готово! Всего голосов за этот вариант: ${data.value}`);
+        } catch (error) {
+            alert("Ошибка сети.");
+            buttons.forEach(btn => btn.disabled = false);
+        }
+    }
+
+    async function fetchResults() {
+        try {
+            const [resJS, resPy, resGo] = await Promise.all([
+                fetch(`${API_URL}/get/${BASE_KEY}_opt_js`).then(r => r.json()),
+                fetch(`${API_URL}/get/${BASE_KEY}_opt_python`).then(r => r.json()),
+                fetch(`${API_URL}/get/${BASE_KEY}_opt_go`).then(r => r.json())
+            ]);
+
+            const js = resJS.value ? parseInt(resJS.value) : 0;
+            const py = resPy.value ? parseInt(resPy.value) : 0;
+            const go = resGo.value ? parseInt(resGo.value) : 0;
+
+            updateSelfMadeChart(js, py, go);
+        } catch (e) {
+            console.log("Ожидание данных...");
+        }
+    }
+
+    // Логика отрисовки нашего кастомного графика
+    function updateSelfMadeChart(js, py, go) {
+        const total = js + py + go;
+
+        // Обновляем текстовые счетчики
+        document.getElementById('count-js').innerText = js;
+        document.getElementById('count-python').innerText = py;
+        document.getElementById('count-go').innerText = go;
+
+        // Считаем проценты для ширины полосок (избегаем деления на ноль)
+        const pctJS = total > 0 ? (js / total) * 100 : 0;
+        const pctPy = total > 0 ? (py / total) * 100 : 0;
+        const pctGo = total > 0 ? (go / total) * 100 : 0;
+
+        // Плавно меняем ширину CSS через style.width
+        document.getElementById('bar-js').style.width = pctJS + '%';
+        document.getElementById('bar-python').style.width = pctPy + '%';
+        document.getElementById('bar-go').style.width = pctGo + '%';
+    }
+
+    function toggleMode() {
+        const voter = document.getElementById('voter-screen');
+        const speaker = document.getElementById('speaker-screen');
+
+        if (voter.classList.contains('hidden')) {
+            voter.classList.remove('hidden');
+            speaker.classList.add('hidden');
+            clearInterval(pollInterval);
+        } else {
+            voter.classList.add('hidden');
+            speaker.classList.remove('hidden');
+            fetchResults();
+            pollInterval = setInterval(fetchResults, 3000); // Опрос каждые 3 секунды
+        }
+    }
+</script>
+</body>
+</html>
