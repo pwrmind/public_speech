@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Какая ты курочка?</title>
+    
+    <!-- Подключаем библиотеку для QR-кода -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
     <style>
         /* --- ШРИФТЫ --- */
         @font-face {
@@ -58,6 +62,41 @@
         h2 { font-size: 24px; margin-bottom: 20px; }
         
         .hidden { display: none !important; }
+
+        /* --- QR КОД --- */
+        .qr-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            transition: transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .qr-container p {
+            margin: 0 0 8px 0;
+            font-size: 12px;
+            font-weight: 900;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* На мобильных устройствах делаем QR-код чуть меньше */
+        @media (max-width: 768px) {
+            .qr-container {
+                transform: scale(0.8);
+                transform-origin: top right;
+                top: 10px;
+                right: 10px;
+            }
+        }
 
         /* --- КНОПКИ --- */
         .btn {
@@ -207,10 +246,9 @@
             height: 100%;
             width: 0%;
             transition: width 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
-            background-color: #000; /* Черный цвет по умолчанию */
+            background-color: #000;
         }
 
-        /* Чередование цветов для графиков */
         .chart-row:nth-child(even) .chart-bar { background-color: var(--accent); }
         .chart-row:nth-child(odd) .chart-bar { background-color: #000; }
 
@@ -224,6 +262,12 @@
     </style>
 </head>
 <body>
+
+<!-- Блок с QR-кодом -->
+<div class="qr-container">
+    <p>Сканируй</p>
+    <div id="qrcode"></div>
+</div>
 
 <div class="container">
     
@@ -261,7 +305,6 @@
         <div class="toggle-mode" onclick="toggleMode()">Переключить в режим слушателя</div>
     </div>
 
-    <!-- Экран Спикера (скрытая кнопка переключения для слушателя) -->
     <div id="voter-toggle" class="toggle-mode" onclick="toggleMode()">Режим докладчика</div>
 
 </div>
@@ -269,7 +312,7 @@
 <script>
     // --- КОНФИГУРАЦИЯ ---
     const API_URL = "https://countapi.mileshilliard.com/api/v1";
-    const BASE_KEY = "chicken_burnout_survey_2026"; // Уникальный ключ для этого опроса
+    const BASE_KEY = "chicken_burnout_survey_2026"; 
     const VOTE_STORAGE_KEY = "poll_vote_chicken_" + BASE_KEY;
     const POLL_INTERVAL_MS = 3000;
 
@@ -317,7 +360,27 @@
             `;
         });
 
+        // Генерация QR-кода
+        generateQRCode();
+        
         restoreVoteState();
+    }
+
+    // --- ГЕНЕРАЦИЯ QR-КОДА ---
+    function generateQRCode() {
+        const qrElement = document.getElementById("qrcode");
+        if (!qrElement) return;
+
+        // Если страница открыта локально (file://), window.location.href будет содержать путь к файлу.
+        // В реальном интернете скрипт подхватит полноценный URL (например, https://ваш-сайт.ру/index.html).
+        new QRCode(qrElement, {
+            text: window.location.href,
+            width: 110,
+            height: 110,
+            colorDark : "#000000",
+            colorLight : "#ffffff",
+            correctLevel : QRCode.CorrectLevel.H
+        });
     }
 
     // --- УТИЛИТЫ API ---
@@ -363,8 +426,7 @@
             // 1. Инкремент счетчика проголосовавших
             promises.push(fetch(`${API_URL}/hit/${BASE_KEY}_voters`));
 
-            // 2. Обновление общего количества баллов (от 1 до 6)
-            // Используем update с параметром amount
+            // 2. Обновление общего количества баллов
             promises.push(ensureKey(`${BASE_KEY}_score`).then(() => 
                 fetch(`${API_URL}/update/${BASE_KEY}_score?amount=${selectedCount}`)
             ));
@@ -377,7 +439,6 @@
 
             await Promise.all(promises);
 
-            // Сохраняем факт голосования
             localStorage.setItem(VOTE_STORAGE_KEY, 'true');
             localStorage.setItem(VOTE_STORAGE_KEY + '_score', selectedCount);
             
@@ -407,7 +468,6 @@
     // --- ЛОГИКА СБОРА РЕЗУЛЬТАТОВ ---
     async function fetchResults() {
         try {
-            // Запрашиваем все данные параллельно
             const votersPromise = getCount(`${BASE_KEY}_voters`);
             const scorePromise = getCount(`${BASE_KEY}_score`);
             const optPromises = QUESTIONS.map((_, i) => getCount(`${BASE_KEY}_opt_${i + 1}`));
@@ -415,14 +475,13 @@
             const [voters, totalScore, ...optCounts] = await Promise.all([votersPromise, scorePromise, ...optPromises]);
 
             updateUI(voters, totalScore, optCounts);
-            showStatus('speaker-status', ''); // Очищаем ошибки
+            showStatus('speaker-status', ''); 
         } catch (e) {
             showStatus('speaker-status', 'Ожидание данных...', 'error');
         }
     }
 
     function updateUI(voters, totalScore, optCounts) {
-        // 1. Обновляем общее число участников и средний балл
         document.getElementById('total-voters').innerText = voters;
         
         let avg = 0;
@@ -431,7 +490,6 @@
         }
         document.getElementById('avg-score').innerText = avg;
 
-        // 2. Обновляем графики по каждому вопросу
         optCounts.forEach((count, index) => {
             const id = index + 1;
             const pct = voters > 0 ? (count / voters) * 100 : 0;
