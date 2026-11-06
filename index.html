@@ -3,275 +3,483 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Микро-SaaS Опросник (Без библиотек)</title>
+    <title>Какая ты курочка?</title>
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; text-align: center; background: #f4f7f6; padding: 20px; color: #333; margin: 0; }
-        .container { max-width: 500px; margin: 40px auto; background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-        h2 { margin-bottom: 25px; font-size: 22px; }
+        /* --- ШРИФТЫ --- */
+        @font-face {
+            font-family: 'CeraCondensed';
+            src: url('CeraCondensedPro-Regular.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+        @font-face {
+            font-family: 'CeraCondensed';
+            src: url('CeraCondensedPro-Black.woff') format('woff');
+            font-weight: 900;
+            font-style: normal;
+        }
 
-        button { display: block; width: 100%; padding: 16px; margin: 12px 0; font-size: 16px; font-weight: 600; cursor: pointer; border: none; border-radius: 10px; background: #2f6b4f; color: white; transition: background 0.2s, transform 0.1s; }
-        button:hover:not(:disabled) { background: #23513b; }
-        button:active:not(:disabled) { transform: scale(0.98); }
-        button:disabled { background: #ccc; cursor: not-allowed; transform: none; }
-        button.voted { background: #4a9b73; }
-        .hidden { display: none; }
+        /* --- ОБЩИЕ СТИЛИ --- */
+        :root {
+            --bg: #ffffff;
+            --accent: #e4002b;
+            --text: #000000;
+            --text-muted: #666666;
+            --border: #e0e0e0;
+        }
 
-        /* Самодельный график */
-        .chart-row { margin: 20px 0; text-align: left; }
-        .chart-label { font-weight: 600; font-size: 14px; margin-bottom: 5px; display: flex; justify-content: space-between; }
-        .chart-track { background: #e0e0e0; width: 100%; height: 26px; border-radius: 6px; overflow: hidden; }
-        .chart-bar { height: 100%; width: 0%; transition: width 0.6s ease-out; }
+        body {
+            font-family: 'CeraCondensed', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+        }
 
-        .bar-js { background: #f1c40f; }
-        .bar-python { background: #3498db; }
-        .bar-go { background: #2ecc71; }
+        .container {
+            width: 100%;
+            max-width: 650px;
+            margin-top: 40px;
+        }
 
-        .toggle-mode { margin-top: 30px; font-size: 13px; color: #888; cursor: pointer; text-decoration: underline; user-select: none; }
-        .hint { font-size: 12px; color: #999; margin-top: 10px; }
-        .total-votes { font-size: 14px; color: #666; margin-bottom: 10px; }
-        .refresh-info { font-size: 12px; color: #999; margin-top: 20px; }
+        h1, h2, h3 {
+            font-family: 'CeraCondensed', sans-serif;
+            font-weight: 900;
+            color: var(--accent);
+            margin-top: 0;
+            text-align: center;
+        }
 
-        .status { padding: 12px; border-radius: 8px; margin: 15px 0; font-size: 14px; text-align: left; }
-        .status.error   { background: #fdecea; color: #b3261e; }
-        .status.success { background: #e6f4ea; color: #1e7e34; }
-        .status.info    { background: #e8f0fe; color: #1967d2; }
+        h1 { font-size: 32px; text-transform: uppercase; margin-bottom: 30px; }
+        h2 { font-size: 24px; margin-bottom: 20px; }
+        
+        .hidden { display: none !important; }
 
-        .reset-btn { background: #dc3545; font-size: 13px; padding: 10px; margin-top: 20px; }
-        .reset-btn:hover:not(:disabled) { background: #b02a37; }
+        /* --- КНОПКИ --- */
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 18px;
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-family: 'CeraCondensed', sans-serif;
+            font-weight: 900;
+            font-size: 20px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+            margin-top: 20px;
+        }
+
+        .btn:hover:not(:disabled) { opacity: 0.9; }
+        .btn:active:not(:disabled) { transform: scale(0.98); }
+        .btn:disabled { background-color: #cccccc; cursor: not-allowed; }
+
+        .toggle-mode {
+            text-align: center;
+            margin-top: 40px;
+            font-size: 14px;
+            color: var(--text-muted);
+            cursor: pointer;
+            text-decoration: underline;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .toggle-mode:hover { color: var(--accent); }
+
+        /* --- ЭКРАН СЛУШАТЕЛЯ --- */
+        .question-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            cursor: pointer;
+            padding: 15px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            transition: border-color 0.2s, background-color 0.2s;
+            font-size: 16px;
+            line-height: 1.4;
+        }
+
+        .checkbox-label:hover { border-color: var(--accent); }
+
+        .checkbox-label input {
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+            height: 0;
+            width: 0;
+        }
+
+        .custom-checkbox {
+            flex-shrink: 0;
+            width: 24px;
+            height: 24px;
+            background-color: white;
+            border: 2px solid var(--border);
+            border-radius: 4px;
+            position: relative;
+            transition: all 0.2s;
+            margin-top: 2px;
+        }
+
+        .checkbox-label input:checked ~ .custom-checkbox {
+            background-color: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .custom-checkbox::after {
+            content: "";
+            position: absolute;
+            display: none;
+            left: 8px;
+            top: 4px;
+            width: 5px;
+            height: 12px;
+            border: solid white;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+        }
+
+        .checkbox-label input:checked ~ .custom-checkbox::after {
+            display: block;
+        }
+        
+        .checkbox-label:has(input:checked) {
+            border-color: var(--accent);
+            background-color: #fdf2f4;
+        }
+
+        /* --- ЭКРАН СПИКЕРА (ГРАФИКИ) --- */
+        .score-display {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 20px;
+            border: 2px solid var(--text);
+            border-radius: 12px;
+        }
+
+        .score-title { font-size: 16px; color: var(--text-muted); margin-bottom: 10px; }
+        .score-value {
+            font-family: 'CeraCondensed', sans-serif;
+            font-weight: 900;
+            font-size: 48px;
+            color: var(--accent);
+            line-height: 1;
+        }
+        .score-max { font-size: 24px; color: var(--text); }
+
+        .chart-row { margin-bottom: 25px; }
+        
+        .chart-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 15px;
+            margin-bottom: 8px;
+            line-height: 1.2;
+        }
+        
+        .chart-label-text { padding-right: 15px; }
+        .chart-label-value { font-weight: 900; white-space: nowrap; }
+
+        .chart-track {
+            background-color: var(--border);
+            width: 100%;
+            height: 28px;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .chart-bar {
+            height: 100%;
+            width: 0%;
+            transition: width 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+            background-color: #000; /* Черный цвет по умолчанию */
+        }
+
+        /* Чередование цветов для графиков */
+        .chart-row:nth-child(even) .chart-bar { background-color: var(--accent); }
+        .chart-row:nth-child(odd) .chart-bar { background-color: #000; }
+
+        .status-msg {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+        .status-msg.error { color: var(--accent); font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Какой стек вы выберете для MVP?</h2>
-
+    
     <!-- ЭКРАН СЛУШАТЕЛЯ -->
     <div id="voter-screen">
-        <p style="color: #666;">Выберите один вариант ответа:</p>
-        <div id="vote-status"></div>
-        <button data-option="js"     onclick="vote('js')">JavaScript / Node.js</button>
-        <button data-option="python" onclick="vote('python')">Python (FastAPI)</button>
-        <button data-option="go"     onclick="vote('go')">Go (Golang)</button>
-        <p class="hint">Голос сохраняется в этом браузере — повторно проголосовать нельзя.</p>
+        <h1>Какая ты курочка?</h1>
+        <p style="text-align: center; color: var(--text-muted); margin-bottom: 30px;">
+            Отметь все утверждения, с которыми ты согласен(на)
+        </p>
+
+        <div class="question-list" id="questions-container">
+            <!-- Вопросы генерируются через JS -->
+        </div>
+
+        <button class="btn" id="submit-btn" onclick="submitVote()">Узнать результат</button>
+        <div id="vote-status" class="status-msg"></div>
     </div>
 
     <!-- ЭКРАН СПИКЕРА -->
     <div id="speaker-screen" class="hidden">
-        <p style="color: #666; margin-bottom: 10px;">Результаты в реальном времени:</p>
-        <p class="total-votes">Всего голосов: <strong id="total-count">0</strong></p>
-
-        <div class="chart-row">
-            <div class="chart-label">
-                <span>Node.js</span>
-                <span><span id="count-js">0</span> (<span id="pct-js">0</span>%)</span>
-            </div>
-            <div class="chart-track"><div id="bar-js" class="chart-bar bar-js"></div></div>
+        <h2 style="text-align: center; margin-bottom: 30px;">Статистика выгорания</h2>
+        
+        <div class="score-display">
+            <div class="score-title">Средний уровень "готовности курочки"</div>
+            <div class="score-value"><span id="avg-score">0.0</span><span class="score-max"> / 6</span></div>
+            <div class="score-title" style="margin-top: 15px; margin-bottom: 0;">Всего участников: <span id="total-voters" style="color: var(--text); font-weight: 900;">0</span></div>
         </div>
 
-        <div class="chart-row">
-            <div class="chart-label">
-                <span>Python</span>
-                <span><span id="count-python">0</span> (<span id="pct-python">0</span>%)</span>
-            </div>
-            <div class="chart-track"><div id="bar-python" class="chart-bar bar-python"></div></div>
+        <div id="charts-container">
+            <!-- Графики генерируются через JS -->
         </div>
 
-        <div class="chart-row">
-            <div class="chart-label">
-                <span>Go</span>
-                <span><span id="count-go">0</span> (<span id="pct-go">0</span>%)</span>
-            </div>
-            <div class="chart-track"><div id="bar-go" class="chart-bar bar-go"></div></div>
-        </div>
-
-        <div id="speaker-status"></div>
-        <p class="refresh-info">Автообновление каждые 3 секунды. Клавиша «S» — переключение режима.</p>
-
-        <button class="reset-btn" onclick="resetPoll()">Сбросить результаты</button>
+        <div id="speaker-status" class="status-msg"></div>
+        
+        <div class="toggle-mode" onclick="toggleMode()">Переключить в режим слушателя</div>
     </div>
 
-    <div class="toggle-mode" onclick="toggleMode()">Переключить режим (Слушатель / Спикер)</div>
+    <!-- Экран Спикера (скрытая кнопка переключения для слушателя) -->
+    <div id="voter-toggle" class="toggle-mode" onclick="toggleMode()">Режим докладчика</div>
+
 </div>
 
 <script>
-    // ---- Конфиг ----
-    const BASE_KEY          = "my_unique_presentation_id_2026";
-    const API_URL           = "https://countapi.mileshilliard.com/api/v1"; // ✅ исправлено
-    const VOTE_STORAGE_KEY  = "poll_vote_" + BASE_KEY;
-    const POLL_INTERVAL_MS  = 3000;
+    // --- КОНФИГУРАЦИЯ ---
+    const API_URL = "https://countapi.mileshilliard.com/api/v1";
+    const BASE_KEY = "chicken_burnout_survey_2026"; // Уникальный ключ для этого опроса
+    const VOTE_STORAGE_KEY = "poll_vote_chicken_" + BASE_KEY;
+    const POLL_INTERVAL_MS = 3000;
+
+    const QUESTIONS = [
+        "Я просыпаюсь уже уставшим(ей), даже после выходных.",
+        "Рабочие задачи вызывают больше раздражения или отвращения, чем раньше.",
+        "Мне сложнее сосредоточиться, помнить детали и принимать решения.",
+        "Я всё чаще думаю, что моя работа бессмысленна или я не справляюсь.",
+        "После работы почти не остаётся сил на жизнь вне работы.",
+        "Отдых помогает ненадолго или совсем не помогает."
+    ];
 
     let pollInterval = null;
-    let currentMode  = "voter";
+    let currentMode = "voter";
 
-    const OPTIONS = {
-        js:     "JavaScript / Node.js",
-        python: "Python (FastAPI)",
-        go:     "Go (Golang)",
-    };
+    // --- ИНИЦИАЛИЗАЦИЯ UI ---
+    function initUI() {
+        // Рендер чекбоксов
+        const qContainer = document.getElementById('questions-container');
+        QUESTIONS.forEach((q, index) => {
+            const id = index + 1;
+            qContainer.innerHTML += `
+                <label class="checkbox-label">
+                    <input type="checkbox" value="${id}" class="vote-checkbox">
+                    <span class="custom-checkbox"></span>
+                    <span>${q}</span>
+                </label>
+            `;
+        });
 
-    // ---- Утилиты ----
-    function showStatus(elId, message, type = "info") {
-        const el = document.getElementById(elId);
-        if (!el) return;
-        el.innerHTML = message
-            ? `<div class="status ${type}">${message}</div>`
-            : "";
+        // Рендер пустых графиков
+        const cContainer = document.getElementById('charts-container');
+        QUESTIONS.forEach((q, index) => {
+            const id = index + 1;
+            cContainer.innerHTML += `
+                <div class="chart-row">
+                    <div class="chart-label">
+                        <span class="chart-label-text">${q}</span>
+                        <span class="chart-label-value" id="pct-${id}">0%</span>
+                    </div>
+                    <div class="chart-track">
+                        <div class="chart-bar" id="bar-${id}"></div>
+                    </div>
+                </div>
+            `;
+        });
+
+        restoreVoteState();
     }
 
-    async function getCount(option) {
-        const res = await fetch(`${API_URL}/get/${BASE_KEY}_opt_${option}`, { cache: "no-store" });
-        if (res.status === 404) return 0;                 // ключа ещё нет — это 0
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        return parseInt(data.value, 10) || 0;
+    // --- УТИЛИТЫ API ---
+    async function getCount(key) {
+        try {
+            const res = await fetch(`${API_URL}/get/${key}`, { cache: "no-store" });
+            if (res.status === 404) return 0;
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            return parseInt(data.value, 10) || 0;
+        } catch (e) {
+            console.warn(`Ошибка получения ${key}:`, e);
+            return 0;
+        }
     }
 
-    // ---- Голосование ----
-    async function vote(option) {
-        // Косметическая защита от повторного голосования
-        const previousVote = localStorage.getItem(VOTE_STORAGE_KEY);
-        if (previousVote) {
-            showStatus("vote-status",
-                `Вы уже голосовали за «${OPTIONS[previousVote]}».`,
-                "error");
+    async function ensureKey(key) {
+        const val = await getCount(key);
+        if (val === 0) {
+            await fetch(`${API_URL}/set/${key}?value=0`);
+        }
+    }
+
+    // --- ЛОГИКА ГОЛОСОВАНИЯ ---
+    async function submitVote() {
+        if (localStorage.getItem(VOTE_STORAGE_KEY)) return;
+
+        const checkboxes = document.querySelectorAll('.vote-checkbox:checked');
+        const selectedCount = checkboxes.length;
+
+        if (selectedCount === 0) {
+            showStatus('vote-status', 'Пожалуйста, выберите хотя бы один вариант.', 'error');
             return;
         }
 
-        const buttons = document.querySelectorAll('#voter-screen button[data-option]');
-        buttons.forEach(b => b.disabled = true);
-        showStatus("vote-status", "Отправляем голос…", "info");
+        const btn = document.getElementById('submit-btn');
+        btn.disabled = true;
+        showStatus('vote-status', 'Отправка данных...', '');
 
         try {
-            const res = await fetch(`${API_URL}/hit/${BASE_KEY}_opt_${option}`);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data  = await res.json();
-            const total = parseInt(data.value, 10) || 0;
+            const promises = [];
 
-            localStorage.setItem(VOTE_STORAGE_KEY, option);
-            document.querySelector(`#voter-screen button[data-option="${option}"]`)
-                    .classList.add("voted");
+            // 1. Инкремент счетчика проголосовавших
+            promises.push(fetch(`${API_URL}/hit/${BASE_KEY}_voters`));
 
-            showStatus("vote-status",
-                `✅ Спасибо! Ваш голос за «${OPTIONS[option]}» учтён.<br><small>Всего за этот вариант: ${total}</small>`,
-                "success");
-        } catch (err) {
-            console.error(err);
-            showStatus("vote-status",
-                `Ошибка сети: ${err.message}. Попробуйте ещё раз.`,
-                "error");
-            buttons.forEach(b => b.disabled = false);
+            // 2. Обновление общего количества баллов (от 1 до 6)
+            // Используем update с параметром amount
+            promises.push(ensureKey(`${BASE_KEY}_score`).then(() => 
+                fetch(`${API_URL}/update/${BASE_KEY}_score?amount=${selectedCount}`)
+            ));
+
+            // 3. Инкремент для каждого выбранного варианта
+            checkboxes.forEach(cb => {
+                const id = cb.value;
+                promises.push(fetch(`${API_URL}/hit/${BASE_KEY}_opt_${id}`));
+            });
+
+            await Promise.all(promises);
+
+            // Сохраняем факт голосования
+            localStorage.setItem(VOTE_STORAGE_KEY, 'true');
+            localStorage.setItem(VOTE_STORAGE_KEY + '_score', selectedCount);
+            
+            showStatus('vote-status', `✅ Ваш уровень курочки: ${selectedCount} из 6. Спасибо!`, '');
+            btn.innerText = "Голос учтен";
+
+        } catch (error) {
+            console.error(error);
+            showStatus('vote-status', 'Ошибка сети. Попробуйте еще раз.', 'error');
+            btn.disabled = false;
         }
     }
 
     function restoreVoteState() {
-        const previousVote = localStorage.getItem(VOTE_STORAGE_KEY);
-        const buttons = document.querySelectorAll('#voter-screen button[data-option]');
-
-        if (previousVote) {
-            buttons.forEach(b => {
-                b.disabled = true;
-                if (b.dataset.option === previousVote) b.classList.add("voted");
-            });
-            showStatus("vote-status",
-                `Вы уже голосовали за «${OPTIONS[previousVote]}».`,
-                "info");
-        } else {
-            buttons.forEach(b => {
-                b.disabled = false;
-                b.classList.remove("voted");
-            });
-            showStatus("vote-status", "");
+        if (localStorage.getItem(VOTE_STORAGE_KEY)) {
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+            btn.innerText = "Вы уже проголосовали";
+            
+            const score = localStorage.getItem(VOTE_STORAGE_KEY + '_score');
+            showStatus('vote-status', `Ваш уровень курочки: ${score} из 6.`, '');
+            
+            document.querySelectorAll('.vote-checkbox').forEach(cb => cb.disabled = true);
         }
     }
 
-    // ---- Результаты ----
+    // --- ЛОГИКА СБОРА РЕЗУЛЬТАТОВ ---
     async function fetchResults() {
         try {
-            const [js, py, go] = await Promise.all([
-                getCount("js"),
-                getCount("python"),
-                getCount("go"),
-            ]);
-            updateChart(js, py, go);
-            showStatus("speaker-status", "");
+            // Запрашиваем все данные параллельно
+            const votersPromise = getCount(`${BASE_KEY}_voters`);
+            const scorePromise = getCount(`${BASE_KEY}_score`);
+            const optPromises = QUESTIONS.map((_, i) => getCount(`${BASE_KEY}_opt_${i + 1}`));
+
+            const [voters, totalScore, ...optCounts] = await Promise.all([votersPromise, scorePromise, ...optPromises]);
+
+            updateUI(voters, totalScore, optCounts);
+            showStatus('speaker-status', ''); // Очищаем ошибки
         } catch (e) {
-            // Мягкая ошибка — продолжаем опрос
-            showStatus("speaker-status",
-                "Не удалось обновить результаты. Повторная попытка через 3 с…",
-                "error");
+            showStatus('speaker-status', 'Ожидание данных...', 'error');
         }
     }
 
-    function updateChart(js, py, go) {
-        const total = js + py + go;
-
-        document.getElementById("total-count").innerText  = total;
-        document.getElementById("count-js").innerText     = js;
-        document.getElementById("count-python").innerText = py;
-        document.getElementById("count-go").innerText     = go;
-
-        const pct = n => total > 0 ? (n / total) * 100 : 0;
-        const pJS = pct(js), pPy = pct(py), pGo = pct(go);
-
-        document.getElementById("pct-js").innerText     = pJS.toFixed(0);
-        document.getElementById("pct-python").innerText = pPy.toFixed(0);
-        document.getElementById("pct-go").innerText     = pGo.toFixed(0);
-
-        document.getElementById("bar-js").style.width     = pJS + "%";
-        document.getElementById("bar-python").style.width = pPy + "%";
-        document.getElementById("bar-go").style.width     = pGo + "%";
-    }
-
-    // ---- Сброс (демо-режим) ----
-    async function resetPoll() {
-        if (!confirm("Сбросить все результаты? Действие необратимо и видно всем, у кого есть ссылка.")) return;
-        try {
-            await Promise.all(Object.keys(OPTIONS).map(opt =>
-                fetch(`${API_URL}/set/${BASE_KEY}_opt_${opt}?value=0`)
-            ));
-            await fetchResults();
-            showStatus("speaker-status", "Результаты сброшены.", "success");
-        } catch (e) {
-            showStatus("speaker-status", "Не удалось сбросить: " + e.message, "error");
+    function updateUI(voters, totalScore, optCounts) {
+        // 1. Обновляем общее число участников и средний балл
+        document.getElementById('total-voters').innerText = voters;
+        
+        let avg = 0;
+        if (voters > 0) {
+            avg = (totalScore / voters).toFixed(1);
         }
+        document.getElementById('avg-score').innerText = avg;
+
+        // 2. Обновляем графики по каждому вопросу
+        optCounts.forEach((count, index) => {
+            const id = index + 1;
+            const pct = voters > 0 ? (count / voters) * 100 : 0;
+            
+            document.getElementById(`pct-${id}`).innerText = `${Math.round(pct)}% (${count})`;
+            document.getElementById(`bar-${id}`).style.width = `${pct}%`;
+        });
     }
 
-    // ---- Переключение режимов ----
-    function stopPolling() {
-        if (pollInterval) {
-            clearInterval(pollInterval);
-            pollInterval = null;   // ✅ сбрасываем ссылку
-        }
-    }
-
+    // --- УПРАВЛЕНИЕ РЕЖИМАМИ ---
     function toggleMode() {
-        const voter   = document.getElementById("voter-screen");
-        const speaker = document.getElementById("speaker-screen");
+        const voterScreen = document.getElementById('voter-screen');
+        const speakerScreen = document.getElementById('speaker-screen');
+        const voterToggle = document.getElementById('voter-toggle');
 
-        if (currentMode === "voter") {
-            currentMode = "speaker";
-            voter.classList.add("hidden");
-            speaker.classList.remove("hidden");
-            showStatus("speaker-status", "");
+        if (currentMode === 'voter') {
+            currentMode = 'speaker';
+            voterScreen.classList.add('hidden');
+            voterToggle.classList.add('hidden');
+            
+            speakerScreen.classList.remove('hidden');
+            
             fetchResults();
-            stopPolling();
+            if (pollInterval) clearInterval(pollInterval);
             pollInterval = setInterval(fetchResults, POLL_INTERVAL_MS);
         } else {
-            currentMode = "voter";
-            voter.classList.remove("hidden");
-            speaker.classList.add("hidden");
-            stopPolling();
-            restoreVoteState();
+            currentMode = 'voter';
+            speakerScreen.classList.add('hidden');
+            
+            voterScreen.classList.remove('hidden');
+            voterToggle.classList.remove('hidden');
+            
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
         }
     }
 
-    // ---- Инициализация ----
-    restoreVoteState();
+    function showStatus(elId, msg, type) {
+        const el = document.getElementById(elId);
+        el.innerText = msg;
+        el.className = 'status-msg ' + (type || '');
+    }
 
-    document.addEventListener("keydown", (e) => {
-        if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
-        if (e.key === "s" || e.key === "S") toggleMode();
-    });
+    // Запуск
+    initUI();
+
 </script>
 </body>
 </html>
