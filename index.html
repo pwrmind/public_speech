@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Какая ты курочка?</title>
+    <title>🐔 Какая ты курочка?</title>
     
     <!-- SVG Favicon (Красно-белые полосы) -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23e4002b'/%3E%3Crect x='20' width='20' height='100' fill='%23ffffff'/%3E%3Crect x='60' width='20' height='100' fill='%23ffffff'/%3E%3C/svg%3E">
@@ -51,7 +51,7 @@
             width: 100%;
             max-width: 650px;
             margin-top: 40px;
-            margin-bottom: 40px; /* Добавили отступ снизу, чтобы QR не перекрывал контент на мобильных */
+            margin-bottom: 60px; /* Отступ снизу, чтобы QR-код не перекрывал контент */
         }
 
         h1, h2, h3 {
@@ -153,7 +153,7 @@
             border: 2px solid var(--border);
             border-radius: 8px;
             transition: border-color 0.2s, background-color 0.2s;
-            font-size: 21px;
+            font-size: 16px;
             line-height: 1.4;
         }
 
@@ -295,7 +295,7 @@
         <h2 style="text-align: center; margin-bottom: 30px;">Статистика выгорания</h2>
         
         <div class="score-display">
-            <div class="score-title">Средний уровень "готовности курочки"</div>
+            <div class="score-title">Средний уровень "готовности курочки" 🐔</div>
             <div class="score-value"><span id="avg-score">0.0</span><span class="score-max"> / 6</span></div>
             <div class="score-title" style="margin-top: 15px; margin-bottom: 0;">Всего участников: <span id="total-voters" style="color: var(--text); font-weight: 900;">0</span></div>
         </div>
@@ -367,6 +367,7 @@
         // Генерация QR-кода
         generateQRCode();
         
+        // Восстановление состояния, если уже голосовали
         restoreVoteState();
     }
 
@@ -399,24 +400,12 @@
         }
     }
 
-    async function ensureKey(key) {
-        const val = await getCount(key);
-        if (val === 0) {
-            await fetch(`${API_URL}/set/${key}?value=0`);
-        }
-    }
-
     // --- ЛОГИКА ГОЛОСОВАНИЯ ---
     async function submitVote() {
         if (localStorage.getItem(VOTE_STORAGE_KEY)) return;
 
         const checkboxes = document.querySelectorAll('.vote-checkbox:checked');
         const selectedCount = checkboxes.length;
-
-        if (selectedCount === 0) {
-            showStatus('vote-status', 'Пожалуйста, выберите хотя бы один вариант.', 'error');
-            return;
-        }
 
         const btn = document.getElementById('submit-btn');
         btn.disabled = true;
@@ -425,26 +414,26 @@
         try {
             const promises = [];
 
-            // 1. Инкремент счетчика проголосовавших
+            // 1. Инкремент счетчика проголосовавших (+1 человек)
             promises.push(fetch(`${API_URL}/hit/${BASE_KEY}_voters`));
 
-            // 2. Обновление общего количества баллов
-            promises.push(ensureKey(`${BASE_KEY}_score`).then(() => 
-                fetch(`${API_URL}/update/${BASE_KEY}_score?amount=${selectedCount}`)
-            ));
-
-            // 3. Инкремент для каждого выбранного варианта
+            // 2. Инкремент для каждого выбранного варианта
             checkboxes.forEach(cb => {
                 const id = cb.value;
                 promises.push(fetch(`${API_URL}/hit/${BASE_KEY}_opt_${id}`));
             });
 
+            // Ждем завершения всех запросов
             await Promise.all(promises);
 
             localStorage.setItem(VOTE_STORAGE_KEY, 'true');
             localStorage.setItem(VOTE_STORAGE_KEY + '_score', selectedCount);
             
-            showStatus('vote-status', `✅ Ваш уровень курочки: ${selectedCount} из 6. Спасибо!`, '');
+            if (selectedCount === 0) {
+                showStatus('vote-status', '✅ Вы абсолютно здоровы! Уровень курочки: 0 из 6.', '');
+            } else {
+                showStatus('vote-status', `✅ Ваш уровень курочки: ${selectedCount} из 6. Спасибо!`, '');
+            }
             btn.innerText = "Голос учтен";
 
         } catch (error) {
@@ -461,7 +450,11 @@
             btn.innerText = "Вы уже проголосовали";
             
             const score = localStorage.getItem(VOTE_STORAGE_KEY + '_score');
-            showStatus('vote-status', `Ваш уровень курочки: ${score} из 6.`, '');
+            if (score === '0') {
+                showStatus('vote-status', `Ваш уровень курочки: 0 из 6.`, '');
+            } else {
+                showStatus('vote-status', `Ваш уровень курочки: ${score} из 6.`, '');
+            }
             
             document.querySelectorAll('.vote-checkbox').forEach(cb => cb.disabled = true);
         }
@@ -470,11 +463,16 @@
     // --- ЛОГИКА СБОРА РЕЗУЛЬТАТОВ ---
     async function fetchResults() {
         try {
+            // Получаем количество проголосовавших
             const votersPromise = getCount(`${BASE_KEY}_voters`);
-            const scorePromise = getCount(`${BASE_KEY}_score`);
+            
+            // Получаем голоса за каждый из 6 вариантов
             const optPromises = QUESTIONS.map((_, i) => getCount(`${BASE_KEY}_opt_${i + 1}`));
 
-            const [voters, totalScore, ...optCounts] = await Promise.all([votersPromise, scorePromise, ...optPromises]);
+            const [voters, ...optCounts] = await Promise.all([votersPromise, ...optPromises]);
+
+            // ВЫЧИСЛЯЕМ ОБЩИЙ БАЛЛ (сумма всех голосов за варианты)
+            const totalScore = optCounts.reduce((sum, count) => sum + count, 0);
 
             updateUI(voters, totalScore, optCounts);
             showStatus('speaker-status', ''); 
@@ -486,6 +484,7 @@
     function updateUI(voters, totalScore, optCounts) {
         document.getElementById('total-voters').innerText = voters;
         
+        // Считаем среднее арифметическое (защита от деления на ноль)
         let avg = 0;
         if (voters > 0) {
             avg = (totalScore / voters).toFixed(1);
@@ -511,7 +510,6 @@
             currentMode = 'speaker';
             voterScreen.classList.add('hidden');
             voterToggle.classList.add('hidden');
-            
             speakerScreen.classList.remove('hidden');
             
             fetchResults();
@@ -520,7 +518,6 @@
         } else {
             currentMode = 'voter';
             speakerScreen.classList.add('hidden');
-            
             voterScreen.classList.remove('hidden');
             voterToggle.classList.remove('hidden');
             
@@ -537,9 +534,8 @@
         el.className = 'status-msg ' + (type || '');
     }
 
-    // Запуск
+    // Запуск приложения
     initUI();
-
 </script>
 </body>
 </html>
