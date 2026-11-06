@@ -8,26 +8,36 @@
         body { font-family: system-ui, -apple-system, sans-serif; text-align: center; background: #f4f7f6; padding: 20px; color: #333; margin: 0; }
         .container { max-width: 500px; margin: 40px auto; background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
         h2 { margin-bottom: 25px; font-size: 22px; }
-        
-        /* Кнопки голосования */
+
         button { display: block; width: 100%; padding: 16px; margin: 12px 0; font-size: 16px; font-weight: 600; cursor: pointer; border: none; border-radius: 10px; background: #2f6b4f; color: white; transition: background 0.2s, transform 0.1s; }
-        button:hover { background: #23513b; }
-        button:active { transform: scale(0.98); }
+        button:hover:not(:disabled) { background: #23513b; }
+        button:active:not(:disabled) { transform: scale(0.98); }
         button:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+        button.voted { background: #4a9b73; }
         .hidden { display: none; }
 
-        /* Самодельный График (Горизонтальные бары) */
+        /* Самодельный график */
         .chart-row { margin: 20px 0; text-align: left; }
         .chart-label { font-weight: 600; font-size: 14px; margin-bottom: 5px; display: flex; justify-content: space-between; }
-        .chart-track { background: #e0e0e0; width: 100%; height: 24px; border-radius: 6px; overflow: hidden; }
-        .chart-bar { height: 100%; width: 0%; /* Меняется через JS */ transition: width 0.5s ease-out; }
-        
-        /* Цвета для разных вариантов */
+        .chart-track { background: #e0e0e0; width: 100%; height: 26px; border-radius: 6px; overflow: hidden; }
+        .chart-bar { height: 100%; width: 0%; transition: width 0.6s ease-out; }
+
         .bar-js { background: #f1c40f; }
         .bar-python { background: #3498db; }
         .bar-go { background: #2ecc71; }
 
-        .toggle-mode { margin-top: 30px; font-size: 13px; color: #888; cursor: pointer; text-decoration: underline; }
+        .toggle-mode { margin-top: 30px; font-size: 13px; color: #888; cursor: pointer; text-decoration: underline; user-select: none; }
+        .hint { font-size: 12px; color: #999; margin-top: 10px; }
+        .total-votes { font-size: 14px; color: #666; margin-bottom: 10px; }
+        .refresh-info { font-size: 12px; color: #999; margin-top: 20px; }
+
+        .status { padding: 12px; border-radius: 8px; margin: 15px 0; font-size: 14px; text-align: left; }
+        .status.error   { background: #fdecea; color: #b3261e; }
+        .status.success { background: #e6f4ea; color: #1e7e34; }
+        .status.info    { background: #e8f0fe; color: #1967d2; }
+
+        .reset-btn { background: #dc3545; font-size: 13px; padding: 10px; margin-top: 20px; }
+        .reset-btn:hover:not(:disabled) { background: #b02a37; }
     </style>
 </head>
 <body>
@@ -38,106 +48,230 @@
     <!-- ЭКРАН СЛУШАТЕЛЯ -->
     <div id="voter-screen">
         <p style="color: #666;">Выберите один вариант ответа:</p>
-        <button onclick="vote('js')">JavaScript / Node.js</button>
-        <button onclick="vote('python')">Python (FastAPI)</button>
-        <button onclick="vote('go')">Go (Golang)</button>
+        <div id="vote-status"></div>
+        <button data-option="js"     onclick="vote('js')">JavaScript / Node.js</button>
+        <button data-option="python" onclick="vote('python')">Python (FastAPI)</button>
+        <button data-option="go"     onclick="vote('go')">Go (Golang)</button>
+        <p class="hint">Голос сохраняется в этом браузере — повторно проголосовать нельзя.</p>
     </div>
 
-    <!-- ЭКРАН СПИКЕРА (САМОДЕЛЬНЫЙ ГРАФИК) -->
+    <!-- ЭКРАН СПИКЕРА -->
     <div id="speaker-screen" class="hidden">
-        <p style="color: #666; margin-bottom: 30px;">Результаты в реальном времени:</p>
-        
+        <p style="color: #666; margin-bottom: 10px;">Результаты в реальном времени:</p>
+        <p class="total-votes">Всего голосов: <strong id="total-count">0</strong></p>
+
         <div class="chart-row">
-            <div class="chart-label"><span>Node.js</span> <span id="count-js">0</span></div>
+            <div class="chart-label">
+                <span>Node.js</span>
+                <span><span id="count-js">0</span> (<span id="pct-js">0</span>%)</span>
+            </div>
             <div class="chart-track"><div id="bar-js" class="chart-bar bar-js"></div></div>
         </div>
 
         <div class="chart-row">
-            <div class="chart-label"><span>Python</span> <span id="count-python">0</span></div>
+            <div class="chart-label">
+                <span>Python</span>
+                <span><span id="count-python">0</span> (<span id="pct-python">0</span>%)</span>
+            </div>
             <div class="chart-track"><div id="bar-python" class="chart-bar bar-python"></div></div>
         </div>
 
         <div class="chart-row">
-            <div class="chart-label"><span>Go</span> <span id="count-go">0</span></div>
+            <div class="chart-label">
+                <span>Go</span>
+                <span><span id="count-go">0</span> (<span id="pct-go">0</span>%)</span>
+            </div>
             <div class="chart-track"><div id="bar-go" class="chart-bar bar-go"></div></div>
         </div>
+
+        <div id="speaker-status"></div>
+        <p class="refresh-info">Автообновление каждые 3 секунды. Клавиша «S» — переключение режима.</p>
+
+        <button class="reset-btn" onclick="resetPoll()">Сбросить результаты</button>
     </div>
 
     <div class="toggle-mode" onclick="toggleMode()">Переключить режим (Слушатель / Спикер)</div>
 </div>
 
 <script>
-    const BASE_KEY = "my_unique_presentation_id_2026"; 
-    const API_URL = "https://countapi.mileshilliard.com";
-    let pollInterval = null;
+    // ---- Конфиг ----
+    const BASE_KEY          = "my_unique_presentation_id_2026";
+    const API_URL           = "https://countapi.mileshilliard.com/api/v1"; // ✅ исправлено
+    const VOTE_STORAGE_KEY  = "poll_vote_" + BASE_KEY;
+    const POLL_INTERVAL_MS  = 3000;
 
+    let pollInterval = null;
+    let currentMode  = "voter";
+
+    const OPTIONS = {
+        js:     "JavaScript / Node.js",
+        python: "Python (FastAPI)",
+        go:     "Go (Golang)",
+    };
+
+    // ---- Утилиты ----
+    function showStatus(elId, message, type = "info") {
+        const el = document.getElementById(elId);
+        if (!el) return;
+        el.innerHTML = message
+            ? `<div class="status ${type}">${message}</div>`
+            : "";
+    }
+
+    async function getCount(option) {
+        const res = await fetch(`${API_URL}/get/${BASE_KEY}_opt_${option}`, { cache: "no-store" });
+        if (res.status === 404) return 0;                 // ключа ещё нет — это 0
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        return parseInt(data.value, 10) || 0;
+    }
+
+    // ---- Голосование ----
     async function vote(option) {
-        const buttons = document.querySelectorAll('#voter-screen button');
-        buttons.forEach(btn => btn.disabled = true);
+        // Косметическая защита от повторного голосования
+        const previousVote = localStorage.getItem(VOTE_STORAGE_KEY);
+        if (previousVote) {
+            showStatus("vote-status",
+                `Вы уже голосовали за «${OPTIONS[previousVote]}».`,
+                "error");
+            return;
+        }
+
+        const buttons = document.querySelectorAll('#voter-screen button[data-option]');
+        buttons.forEach(b => b.disabled = true);
+        showStatus("vote-status", "Отправляем голос…", "info");
 
         try {
-            const response = await fetch(`${API_URL}/hit/${BASE_KEY}_opt_${option}`);
-            const data = await response.json();
-            alert(`Готово! Всего голосов за этот вариант: ${data.value}`);
-        } catch (error) {
-            alert("Ошибка сети.");
-            buttons.forEach(btn => btn.disabled = false);
+            const res = await fetch(`${API_URL}/hit/${BASE_KEY}_opt_${option}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data  = await res.json();
+            const total = parseInt(data.value, 10) || 0;
+
+            localStorage.setItem(VOTE_STORAGE_KEY, option);
+            document.querySelector(`#voter-screen button[data-option="${option}"]`)
+                    .classList.add("voted");
+
+            showStatus("vote-status",
+                `✅ Спасибо! Ваш голос за «${OPTIONS[option]}» учтён.<br><small>Всего за этот вариант: ${total}</small>`,
+                "success");
+        } catch (err) {
+            console.error(err);
+            showStatus("vote-status",
+                `Ошибка сети: ${err.message}. Попробуйте ещё раз.`,
+                "error");
+            buttons.forEach(b => b.disabled = false);
         }
     }
 
+    function restoreVoteState() {
+        const previousVote = localStorage.getItem(VOTE_STORAGE_KEY);
+        const buttons = document.querySelectorAll('#voter-screen button[data-option]');
+
+        if (previousVote) {
+            buttons.forEach(b => {
+                b.disabled = true;
+                if (b.dataset.option === previousVote) b.classList.add("voted");
+            });
+            showStatus("vote-status",
+                `Вы уже голосовали за «${OPTIONS[previousVote]}».`,
+                "info");
+        } else {
+            buttons.forEach(b => {
+                b.disabled = false;
+                b.classList.remove("voted");
+            });
+            showStatus("vote-status", "");
+        }
+    }
+
+    // ---- Результаты ----
     async function fetchResults() {
         try {
-            const [resJS, resPy, resGo] = await Promise.all([
-                fetch(`${API_URL}/get/${BASE_KEY}_opt_js`).then(r => r.json()),
-                fetch(`${API_URL}/get/${BASE_KEY}_opt_python`).then(r => r.json()),
-                fetch(`${API_URL}/get/${BASE_KEY}_opt_go`).then(r => r.json())
+            const [js, py, go] = await Promise.all([
+                getCount("js"),
+                getCount("python"),
+                getCount("go"),
             ]);
-
-            const js = resJS.value ? parseInt(resJS.value) : 0;
-            const py = resPy.value ? parseInt(resPy.value) : 0;
-            const go = resGo.value ? parseInt(resGo.value) : 0;
-
-            updateSelfMadeChart(js, py, go);
+            updateChart(js, py, go);
+            showStatus("speaker-status", "");
         } catch (e) {
-            console.log("Ожидание данных...");
+            // Мягкая ошибка — продолжаем опрос
+            showStatus("speaker-status",
+                "Не удалось обновить результаты. Повторная попытка через 3 с…",
+                "error");
         }
     }
 
-    // Логика отрисовки нашего кастомного графика
-    function updateSelfMadeChart(js, py, go) {
+    function updateChart(js, py, go) {
         const total = js + py + go;
 
-        // Обновляем текстовые счетчики
-        document.getElementById('count-js').innerText = js;
-        document.getElementById('count-python').innerText = py;
-        document.getElementById('count-go').innerText = go;
+        document.getElementById("total-count").innerText  = total;
+        document.getElementById("count-js").innerText     = js;
+        document.getElementById("count-python").innerText = py;
+        document.getElementById("count-go").innerText     = go;
 
-        // Считаем проценты для ширины полосок (избегаем деления на ноль)
-        const pctJS = total > 0 ? (js / total) * 100 : 0;
-        const pctPy = total > 0 ? (py / total) * 100 : 0;
-        const pctGo = total > 0 ? (go / total) * 100 : 0;
+        const pct = n => total > 0 ? (n / total) * 100 : 0;
+        const pJS = pct(js), pPy = pct(py), pGo = pct(go);
 
-        // Плавно меняем ширину CSS через style.width
-        document.getElementById('bar-js').style.width = pctJS + '%';
-        document.getElementById('bar-python').style.width = pctPy + '%';
-        document.getElementById('bar-go').style.width = pctGo + '%';
+        document.getElementById("pct-js").innerText     = pJS.toFixed(0);
+        document.getElementById("pct-python").innerText = pPy.toFixed(0);
+        document.getElementById("pct-go").innerText     = pGo.toFixed(0);
+
+        document.getElementById("bar-js").style.width     = pJS + "%";
+        document.getElementById("bar-python").style.width = pPy + "%";
+        document.getElementById("bar-go").style.width     = pGo + "%";
+    }
+
+    // ---- Сброс (демо-режим) ----
+    async function resetPoll() {
+        if (!confirm("Сбросить все результаты? Действие необратимо и видно всем, у кого есть ссылка.")) return;
+        try {
+            await Promise.all(Object.keys(OPTIONS).map(opt =>
+                fetch(`${API_URL}/set/${BASE_KEY}_opt_${opt}?value=0`)
+            ));
+            await fetchResults();
+            showStatus("speaker-status", "Результаты сброшены.", "success");
+        } catch (e) {
+            showStatus("speaker-status", "Не удалось сбросить: " + e.message, "error");
+        }
+    }
+
+    // ---- Переключение режимов ----
+    function stopPolling() {
+        if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;   // ✅ сбрасываем ссылку
+        }
     }
 
     function toggleMode() {
-        const voter = document.getElementById('voter-screen');
-        const speaker = document.getElementById('speaker-screen');
+        const voter   = document.getElementById("voter-screen");
+        const speaker = document.getElementById("speaker-screen");
 
-        if (voter.classList.contains('hidden')) {
-            voter.classList.remove('hidden');
-            speaker.classList.add('hidden');
-            clearInterval(pollInterval);
-        } else {
-            voter.classList.add('hidden');
-            speaker.classList.remove('hidden');
+        if (currentMode === "voter") {
+            currentMode = "speaker";
+            voter.classList.add("hidden");
+            speaker.classList.remove("hidden");
+            showStatus("speaker-status", "");
             fetchResults();
-            pollInterval = setInterval(fetchResults, 3000); // Опрос каждые 3 секунды
+            stopPolling();
+            pollInterval = setInterval(fetchResults, POLL_INTERVAL_MS);
+        } else {
+            currentMode = "voter";
+            voter.classList.remove("hidden");
+            speaker.classList.add("hidden");
+            stopPolling();
+            restoreVoteState();
         }
     }
+
+    // ---- Инициализация ----
+    restoreVoteState();
+
+    document.addEventListener("keydown", (e) => {
+        if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+        if (e.key === "s" || e.key === "S") toggleMode();
+    });
 </script>
 </body>
 </html>
