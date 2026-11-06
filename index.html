@@ -51,7 +51,7 @@
             width: 100%;
             max-width: 650px;
             margin-top: 40px;
-            margin-bottom: 60px; /* Отступ снизу, чтобы QR-код не перекрывал контент */
+            margin-bottom: 60px;
         }
 
         h1, h2, h3 {
@@ -92,7 +92,6 @@
             letter-spacing: 0.5px;
         }
 
-        /* На мобильных устройствах делаем QR-код чуть меньше */
         @media (max-width: 768px) {
             .qr-container {
                 transform: scale(0.8);
@@ -314,10 +313,10 @@
 </div>
 
 <script>
-    // --- КОНФИГУРАЦИЯ ---
-    const API_URL = "https://countapi.mileshilliard.com/api/v1";
-    const BASE_KEY = "chicken_burnout_survey_2026"; 
-    const VOTE_STORAGE_KEY = "poll_vote_chicken_" + BASE_KEY;
+    // --- КОНФИГУРАЦИЯ ABACUS ---
+    const ABACUS_BASE = "https://abacus.jasoncameron.dev";
+    const NAMESPACE = "chicken_burnout_survey_2026"; // Ваше пространство имен
+    const VOTE_STORAGE_KEY = "poll_vote_chicken_" + NAMESPACE;
     const POLL_INTERVAL_MS = 3000;
 
     const QUESTIONS = [
@@ -334,7 +333,6 @@
 
     // --- ИНИЦИАЛИЗАЦИЯ UI ---
     function initUI() {
-        // Рендер чекбоксов
         const qContainer = document.getElementById('questions-container');
         QUESTIONS.forEach((q, index) => {
             const id = index + 1;
@@ -347,7 +345,6 @@
             `;
         });
 
-        // Рендер пустых графиков
         const cContainer = document.getElementById('charts-container');
         QUESTIONS.forEach((q, index) => {
             const id = index + 1;
@@ -364,10 +361,7 @@
             `;
         });
 
-        // Генерация QR-кода
         generateQRCode();
-        
-        // Восстановление состояния, если уже голосовали
         restoreVoteState();
     }
 
@@ -375,7 +369,6 @@
     function generateQRCode() {
         const qrElement = document.getElementById("qrcode");
         if (!qrElement) return;
-
         new QRCode(qrElement, {
             text: window.location.href,
             width: 110,
@@ -386,11 +379,12 @@
         });
     }
 
-    // --- УТИЛИТЫ API ---
+    // --- УТИЛИТЫ ABACUS API ---
+    // Получение значения счетчика (чистое чтение)
     async function getCount(key) {
         try {
-            const res = await fetch(`${API_URL}/get/${key}`, { cache: "no-store" });
-            if (res.status === 404) return 0;
+            const res = await fetch(`${ABACUS_BASE}/get/${NAMESPACE}/${key}`, { cache: "no-store" });
+            if (res.status === 404) return 0; // Счетчик еще не создан
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
             return parseInt(data.value, 10) || 0;
@@ -398,6 +392,13 @@
             console.warn(`Ошибка получения ${key}:`, e);
             return 0;
         }
+    }
+
+    // Инкремент счетчика (атомарное увеличение на 1)
+    async function hitCount(key) {
+        const res = await fetch(`${ABACUS_BASE}/hit/${NAMESPACE}/${key}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status} при hit ${key}`);
+        return await res.json();
     }
 
     // --- ЛОГИКА ГОЛОСОВАНИЯ ---
@@ -415,15 +416,14 @@
             const promises = [];
 
             // 1. Инкремент счетчика проголосовавших (+1 человек)
-            promises.push(fetch(`${API_URL}/hit/${BASE_KEY}_voters`));
+            promises.push(hitCount('voters'));
 
             // 2. Инкремент для каждого выбранного варианта
             checkboxes.forEach(cb => {
                 const id = cb.value;
-                promises.push(fetch(`${API_URL}/hit/${BASE_KEY}_opt_${id}`));
+                promises.push(hitCount(`opt_${id}`));
             });
 
-            // Ждем завершения всех запросов
             await Promise.all(promises);
 
             localStorage.setItem(VOTE_STORAGE_KEY, 'true');
@@ -463,11 +463,8 @@
     // --- ЛОГИКА СБОРА РЕЗУЛЬТАТОВ ---
     async function fetchResults() {
         try {
-            // Получаем количество проголосовавших
-            const votersPromise = getCount(`${BASE_KEY}_voters`);
-            
-            // Получаем голоса за каждый из 6 вариантов
-            const optPromises = QUESTIONS.map((_, i) => getCount(`${BASE_KEY}_opt_${i + 1}`));
+            const votersPromise = getCount('voters');
+            const optPromises = QUESTIONS.map((_, i) => getCount(`opt_${i + 1}`));
 
             const [voters, ...optCounts] = await Promise.all([votersPromise, ...optPromises]);
 
@@ -484,7 +481,6 @@
     function updateUI(voters, totalScore, optCounts) {
         document.getElementById('total-voters').innerText = voters;
         
-        // Считаем среднее арифметическое (защита от деления на ноль)
         let avg = 0;
         if (voters > 0) {
             avg = (totalScore / voters).toFixed(1);
